@@ -18,16 +18,19 @@ import androidx.core.app.NotificationCompat.BigTextStyle;
 import androidx.core.app.NotificationCompat.Builder;
 
 import net.osmand.Location;
+import net.osmand.StateChangedListener;
 import net.osmand.plus.NavigationService;
 import net.osmand.plus.OsmAndFormatter;
 import net.osmand.plus.OsmandApplication;
 import net.osmand.plus.R;
 import net.osmand.plus.TargetPointsHelper.TargetPoint;
 import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.helpers.enums.DrivingRegion;
 import net.osmand.plus.routing.RouteCalculationResult;
 import net.osmand.plus.routing.RouteCalculationResult.NextDirectionInfo;
 import net.osmand.plus.routing.RouteDirectionInfo;
 import net.osmand.plus.routing.RoutingHelper;
+import net.osmand.plus.settings.backend.OsmandSettings;
 import net.osmand.plus.views.TurnPathHelper;
 import net.osmand.plus.views.mapwidgets.TurnDrawable;
 import net.osmand.router.TurnType;
@@ -59,7 +62,15 @@ public class NavigationNotification extends OsmandNotification {
 
 	@Override
 	public void init() {
-		leftSide = app.getSettings().DRIVING_REGION.get().leftHandDriving;
+		final OsmandSettings settings = app.getSettings();
+		leftSide = settings.DRIVING_REGION.get().leftHandDriving;
+		settings.DRIVING_REGION.addListener(new StateChangedListener<DrivingRegion>() {
+			@Override
+			public void stateChanged(DrivingRegion change) {
+				leftSide = settings.DRIVING_REGION.get().leftHandDriving;
+			}
+		});
+
 		app.registerReceiver(new BroadcastReceiver() {
 
 			@Override

@@ -466,6 +466,11 @@ public class MapViewTrackingUtilities implements OsmAndLocationListener, IMapLoc
 	private static class DetectDrivingRegionTask extends AsyncTask<LatLon, Void, WorldRegion> {
 
 		private OsmandApplication app;
+		private ResponseCallback callback;
+
+		public DetectDrivingRegionTask(ResponseCallback callback) {
+			this.callback = callback;
+		}
 
 		DetectDrivingRegionTask(OsmandApplication app) {
 			this.app = app;
@@ -489,6 +494,7 @@ public class MapViewTrackingUtilities implements OsmAndLocationListener, IMapLoc
 		@Override
 		protected void onPostExecute(WorldRegion worldRegion) {
 			if (worldRegion != null) {
+				callback.response(worldRegion);
 				app.setupDrivingRegion(worldRegion);
 			}
 		}

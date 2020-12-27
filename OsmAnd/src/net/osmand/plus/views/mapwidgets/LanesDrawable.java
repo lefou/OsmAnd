@@ -11,8 +11,11 @@ import android.graphics.drawable.Drawable;
 
 import androidx.annotation.NonNull;
 
+import net.osmand.StateChangedListener;
 import net.osmand.plus.R;
 import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.helpers.enums.DrivingRegion;
+import net.osmand.plus.routing.RoutingHelper;
 import net.osmand.plus.settings.backend.OsmandSettings;
 import net.osmand.plus.views.TurnPathHelper;
 import net.osmand.router.TurnType;
@@ -36,14 +39,21 @@ public class LanesDrawable extends Drawable {
 	private float delta;
 	private float laneHalfSize;
 	private static final float miniCoeff = 2f;
-	private final boolean leftSide;
+	private boolean leftSide;
 	private int imgMinDelta;
 	private int imgMargin;
 
 	public LanesDrawable(MapActivity ctx, float scaleCoefficent) {
 		this.ctx = ctx;
-		OsmandSettings settings = ctx.getMyApplication().getSettings();
+		final OsmandSettings settings = ctx.getMyApplication().getSettings();
 		leftSide = settings.DRIVING_REGION.get().leftHandDriving;
+		settings.DRIVING_REGION.addListener(new StateChangedListener<DrivingRegion>() {
+			@Override
+			public void stateChanged(DrivingRegion change) {
+				leftSide = settings.DRIVING_REGION.get().leftHandDriving;
+			}
+		});
+
 		imgMinDelta = ctx.getResources().getDimensionPixelSize(R.dimen.widget_turn_lane_min_delta);
 		imgMargin = ctx.getResources().getDimensionPixelSize(R.dimen.widget_turn_lane_margin);
 		laneHalfSize = ctx.getResources().getDimensionPixelSize(R.dimen.widget_turn_lane_size) / 2;

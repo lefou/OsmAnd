@@ -9,7 +9,9 @@ import net.osmand.StateChangedListener;
 import net.osmand.data.LatLon;
 import net.osmand.data.LocationPoint;
 import net.osmand.data.PointDescription;
+import net.osmand.map.WorldRegion;
 import net.osmand.plus.GeocodingLookupService.AddressLookupRequest;
+import net.osmand.plus.base.ResponseCallback;
 import net.osmand.plus.routing.RouteProvider.RouteService;
 import net.osmand.plus.routing.RoutingHelper;
 import net.osmand.plus.routing.RoutingHelperUtils;
@@ -22,7 +24,7 @@ import net.osmand.util.MapUtils;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TargetPointsHelper {
+public class TargetPointsHelper implements ResponseCallback {
 
 	private List<TargetPoint> intermediatePoints = new ArrayList<>();
 	private TargetPoint pointToNavigate = null;
@@ -40,6 +42,10 @@ public class TargetPointsHelper {
 	private AddressLookupRequest targetPointRequest;
 	private AddressLookupRequest myLocationPointRequest;
 
+	@Override
+	public void response(WorldRegion response) {
+		updateRoutingHelper();
+	}
 
 	public interface TargetPointChangedListener {
 		void onTargetPointChanged(TargetPoint targetPoint);
