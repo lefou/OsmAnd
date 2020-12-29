@@ -55,6 +55,7 @@ import net.osmand.plus.mapcontextmenu.controllers.TransportStopController;
 import net.osmand.plus.openplacereviews.AddPhotosBottomSheetDialogFragment;
 import net.osmand.plus.openplacereviews.OPRConstants;
 import net.osmand.plus.openplacereviews.OprStartFragment;
+import net.osmand.plus.osmedit.dialogs.UploadPhotoProgressBottomSheet;
 import net.osmand.plus.osmedit.opr.OpenDBAPI;
 import net.osmand.plus.poi.PoiUIFilter;
 import net.osmand.plus.render.RenderingIcons;
@@ -482,7 +483,7 @@ public class MenuBuilder {
 				if (res != 200) {
 					showToastMessage(error.toString());
 				} else {
-					//ok, continue
+					UploadPhotoProgressBottomSheet.showInstance(mapActivity.getSupportFragmentManager());
 				}
 			} catch (FailedVerificationException e) {
 				LOG.error(e);
@@ -492,8 +493,7 @@ public class MenuBuilder {
 				//image was uploaded but not added to blockchain
 				checkTokenAndShowScreen();
 			} else {
-				String str = app.getString(R.string.successfully_uploaded_pattern, 1, 1);
-				showToastMessage(str);
+				UploadPhotoProgressBottomSheet.showInstance(mapActivity.getSupportFragmentManager());
 				//refresh the image
 				execute(new GetImageCardsTask(mapActivity, getLatLon(), getAdditionalCardParams(), imageCardListener));
 			}
