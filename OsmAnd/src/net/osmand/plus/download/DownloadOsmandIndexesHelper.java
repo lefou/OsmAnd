@@ -8,7 +8,9 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 import net.osmand.AndroidUtils;
@@ -33,7 +35,7 @@ import android.provider.Settings.Secure;
 
 public class DownloadOsmandIndexesHelper {
 	private final static Log log = PlatformUtil.getLog(DownloadOsmandIndexesHelper.class);
-	
+
 	public static class IndexFileList implements Serializable {
 		private static final long serialVersionUID = 1L;
 
@@ -41,7 +43,7 @@ public class DownloadOsmandIndexesHelper {
 		IndexItem basemap;
 		ArrayList<IndexItem> indexFiles = new ArrayList<IndexItem>();
 		private String mapversion;
-		
+
 		private Comparator<IndexItem> comparator = new Comparator<IndexItem>(){
 			@Override
 			public int compare(IndexItem o1, IndexItem o2) {
@@ -59,11 +61,11 @@ public class DownloadOsmandIndexesHelper {
 				return object1.compareTo(object2);
 			}
 		};
-		
+
 		public void setDownloadedFromInternet(boolean downloadedFromInternet) {
 			this.downloadedFromInternet = downloadedFromInternet;
 		}
-		
+
 		public boolean isDownloadedFromInternet() {
 			return downloadedFromInternet;
 		}
@@ -79,7 +81,7 @@ public class DownloadOsmandIndexesHelper {
 				basemap = indexItem;
 			}
 		}
-		
+
 		public void sort(){
 			Collections.sort(indexFiles, comparator);
 		}
@@ -91,7 +93,7 @@ public class DownloadOsmandIndexesHelper {
 		public List<IndexItem> getIndexFiles() {
 			return indexFiles;
 		}
-		
+
 		public IndexItem getBasemap() {
 			return basemap;
 		}
@@ -106,7 +108,7 @@ public class DownloadOsmandIndexesHelper {
 			return false;
 		}
 
-	}	
+	}
 
 	public static IndexFileList getIndexesList(OsmandApplication app) {
 		PackageManager pm = app.getPackageManager();
@@ -122,18 +124,17 @@ public class DownloadOsmandIndexesHelper {
 		return result;
 	}
 
-	public static List<AssetEntry> getBundledAssets(AssetManager assetManager) throws XmlPullParserException, IOException {
+	public static Map<String, String>  assetMapping(AssetManager assetManager) throws XmlPullParserException, IOException {
 		XmlPullParser xmlParser = XmlPullParserFactory.newInstance().newPullParser();
 		InputStream isBundledAssetsXml = assetManager.open("bundled_assets.xml");
 		xmlParser.setInput(isBundledAssetsXml, "UTF-8");
-		List<AssetEntry> assets = new ArrayList<>();
+		Map<String, String> assets = new HashMap<String, String>();
 		int next = 0;
 		while ((next = xmlParser.next()) != XmlPullParser.END_DOCUMENT) {
 			if (next == XmlPullParser.START_TAG && xmlParser.getName().equals("asset")) {
 				final String source = xmlParser.getAttributeValue(null, "source");
 				final String destination = xmlParser.getAttributeValue(null, "destination");
-				final String combinedMode = xmlParser.getAttributeValue(null, "mode");
-				assets.add(new AssetEntry(source, destination, combinedMode));
+				assets.put(source, destination);
 			}
 		}
 		isBundledAssetsXml.close();
@@ -143,7 +144,7 @@ public class DownloadOsmandIndexesHelper {
 	private static void listVoiceAssets(IndexFileList result, AssetManager amanager, PackageManager pm,
 			OsmandSettings settings) {
 		try {
-			File voicePath = settings.getContext().getAppPath(IndexConstants.VOICE_INDEX_DIR); 
+			File voicePath = settings.getContext().getAppPath(IndexConstants.VOICE_INDEX_DIR);
 			// list = amanager.list("voice");
 			String date = "";
 			long dateModified = System.currentTimeMillis();
@@ -154,18 +155,16 @@ public class DownloadOsmandIndexesHelper {
 			} catch (NameNotFoundException e) {
 				//do nothing...
 			}
-			List<AssetEntry> mapping = getBundledAssets(amanager);
-			for (AssetEntry asset : mapping) {
-				String target = asset.destination;
-				if (target.endsWith(IndexConstants.TTSVOICE_INDEX_EXT_JS)
-						&& target.startsWith(IndexConstants.VOICE_INDEX_DIR)
-						&& target.contains(IndexConstants.VOICE_PROVIDER_SUFFIX)) {
+			Map<String, String> mapping = assetMapping(amanager);
+			for (String key : mapping.keySet()) {
+				String target = mapping.get(key);
+				if (target.endsWith(IndexConstants.TTSVOICE_INDEX_EXT_JS) && target.startsWith("voice/")  && target.contains("-tts") ) {
 					String lang = target.substring(IndexConstants.VOICE_INDEX_DIR.length(),
 							target.indexOf(IndexConstants.VOICE_PROVIDER_SUFFIX));
 					File destFile = new File(voicePath, target.substring(IndexConstants.VOICE_INDEX_DIR.length(),
 							target.indexOf("/", IndexConstants.VOICE_INDEX_DIR.length())) + "/" + lang + "_tts.js");
 					result.add(new AssetIndexItem(lang + "_" + IndexConstants.TTSVOICE_INDEX_EXT_JS,
-							"voice", date, dateModified, "0.1", destFile.length(), asset.source,
+							"voice", date, dateModified, "0.1", destFile.length(), key,
 							destFile.getPath(), DownloadActivityType.VOICE_FILE));
 				}
 			}
@@ -176,7 +175,7 @@ public class DownloadOsmandIndexesHelper {
 			log.error("Error while loading tts files from assets", e); //$NON-NLS-1$
 		}
 	}
-	
+
 
 	private static IndexFileList downloadIndexesListFromInternet(OsmandApplication ctx){
 		try {
@@ -186,7 +185,7 @@ public class DownloadOsmandIndexesHelper {
 				String strUrl = ctx.getAppCustomization().getIndexesUrl();
 				long nd = ctx.getAppInitializer().getFirstInstalledDays();
 				if(nd > 0) {
-					strUrl += "&nd=" + nd; 
+					strUrl += "&nd=" + nd;
 				}
 				strUrl += "&ns=" + ctx.getAppInitializer().getNumberOfStarts();
 				try {
@@ -225,7 +224,7 @@ public class DownloadOsmandIndexesHelper {
 				log.error("Error while loading indexes from repository", e); //$NON-NLS-1$
 				return null;
 			}
-			
+
 			if (result.isAcceptable()) {
 				return result;
 			} else {
@@ -238,7 +237,7 @@ public class DownloadOsmandIndexesHelper {
 	}
 
 	public static class AssetIndexItem extends IndexItem {
-		
+
 		private final String assetName;
 		private final String destFile;
 		private final long dateModified;
@@ -250,7 +249,7 @@ public class DownloadOsmandIndexesHelper {
 			this.assetName = assetName;
 			this.destFile = destFile;
 		}
-		
+
 		public long getDateModified() {
 			return dateModified;
 		}
