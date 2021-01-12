@@ -140,6 +140,7 @@ import net.osmand.plus.settings.fragments.BaseSettingsFragment.SettingsScreenTyp
 import net.osmand.plus.settings.fragments.ConfigureProfileFragment;
 import net.osmand.plus.settings.fragments.DataStorageFragment;
 import net.osmand.plus.track.TrackAppearanceFragment;
+import net.osmand.plus.track.TrackMenuFragment;
 import net.osmand.plus.views.AddGpxPointBottomSheetHelper.NewGpxPoint;
 import net.osmand.plus.views.AnimateDraggingMapThread;
 import net.osmand.plus.views.OsmAndMapLayersView;
@@ -195,6 +196,7 @@ public class MapActivity extends OsmandActionBarActivity implements DownloadEven
 	private static MapContextMenu mapContextMenu = new MapContextMenu();
 	private static MapRouteInfoMenu mapRouteInfoMenu = new MapRouteInfoMenu();
 	private static TrackDetailsMenu trackDetailsMenu = new TrackDetailsMenu();
+	private static TrackMenuFragment trackFragmentMenu = new TrackMenuFragment();
 	private static Intent prevActivityIntent = null;
 
 	private List<ActivityResultListener> activityResultListeners = new ArrayList<>();
@@ -1666,6 +1668,11 @@ public class MapActivity extends OsmandActionBarActivity implements DownloadEven
 	@NonNull
 	public TrackDetailsMenu getTrackDetailsMenu() {
 		return trackDetailsMenu;
+	}
+
+	@NonNull
+	public TrackMenuFragment getTrackMenuFragment() {
+		return trackFragmentMenu;
 	}
 
 	public void hideContextAndRouteInfoMenues() {
