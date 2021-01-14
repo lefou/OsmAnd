@@ -54,6 +54,7 @@ import net.osmand.plus.UiUtilities;
 import net.osmand.plus.Version;
 import net.osmand.plus.activities.ActivityResultListener;
 import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.dialogs.UploadPhotoWithProgressBarBottomSheet;
 import net.osmand.plus.helpers.FontCache;
 import net.osmand.plus.mapcontextmenu.builders.cards.AbstractCard;
 import net.osmand.plus.mapcontextmenu.builders.cards.CardsRowBuilder;
@@ -90,6 +91,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import javax.security.auth.callback.Callback;
 
 import static net.osmand.plus.mapcontextmenu.builders.cards.ImageCard.GetImageCardsTask.GetImageCardsListener;
 
@@ -471,21 +474,39 @@ public class MenuBuilder {
 			@Override
 			public void onResult(int resultCode, Intent resultData) {
 				if (resultData != null) {
-					handleSelectedImage(view, resultData.getData());
+					new PhotoUploadTask().execute(resultData.getData());
 				}
 			}
 		}));
 	}
 
-	private void handleSelectedImage(final View view, final Uri uri) {
-		Thread t = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				InputStream inputStream = null;
+	public class PhotoUploadTask extends AsyncTask<Uri, Integer, Long> {
+		private final Callback callback;
+
+		public interface Callback {
+			void onProgressUpdate(Integer progress);
+		}
+
+		public PhotoUploadTask(Callback callback) {
+			this.callback = callback;
+		}
+
+		protected void onPreExecute(){
+			UploadPhotoWithProgressBarBottomSheet.showInstance(mapActivity.getSupportFragmentManager());
+		}
+
+		protected Long doInBackground(Uri... params) {
+			InputStream inputStream = null;
+			int count = params.length;
+			long totalSize = 0;
+			for (int i = 0; i <= count; i++) {
 				try {
-					inputStream = app.getContentResolver().openInputStream(uri);
+					inputStream = app.getContentResolver().openInputStream(params[i]);
+					int length = inputStream.available();
 					if (inputStream != null) {
+						Thread.sleep(1000);
 						uploadImageToPlace(inputStream);
+						totalSize += length;
 					}
 				} catch (Exception e) {
 					LOG.error(e);
@@ -494,10 +515,22 @@ public class MenuBuilder {
 				} finally {
 					Algorithms.closeStream(inputStream);
 				}
+				publishProgress((int) (((i + 1) / (float) count) * 100));
+				if (isCancelled()) {
+					break;
+				}
 			}
-		});
-		t.start();
+			return totalSize;
+		}
+
+		protected void onProgressUpdate(Integer... progress) {
+			publishProgress(progress[0]);
+		}
+
+		protected void onPostExecute(Long result) {
+		}
 	}
+
 
 	private void uploadImageToPlace(InputStream image) {
 		InputStream serverData = new ByteArrayInputStream(compressImage(image));
