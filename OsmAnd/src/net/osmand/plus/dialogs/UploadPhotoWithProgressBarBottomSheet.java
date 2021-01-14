@@ -9,6 +9,7 @@ import android.widget.ProgressBar;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.fragment.app.FragmentManager;
 
 import net.osmand.plus.R;
@@ -18,12 +19,12 @@ import net.osmand.plus.base.MenuBottomSheetDialogFragment;
 import net.osmand.plus.base.bottomsheetmenu.BaseBottomSheetItem;
 import net.osmand.plus.base.bottomsheetmenu.BottomSheetItemWithDescription;
 import net.osmand.plus.base.bottomsheetmenu.simpleitems.DividerSpaceItem;
-import net.osmand.plus.mapcontextmenu.MenuBuilder;
+import net.osmand.plus.widgets.TextViewEx;
 
 public class UploadPhotoWithProgressBarBottomSheet extends MenuBottomSheetDialogFragment {
 
 	public static final String TAG = UploadPhotoWithProgressBarBottomSheet.class.getSimpleName();
-	private ProgressBar planRouteProgressBar;
+	private ProgressBar uploadPhotoProgressBar;
 
 	public static void showInstance(@NonNull FragmentManager fragmentManager) {
 		if (!fragmentManager.isStateSaved()) {
@@ -41,24 +42,39 @@ public class UploadPhotoWithProgressBarBottomSheet extends MenuBottomSheetDialog
 				.create();
 
 		items.add(descriptionItem);
-		View pbContainer = LayoutInflater.from(getMapActivity()).inflate(R.layout.bottom_sheet_with_progress_bar, null);
-		planRouteProgressBar = pbContainer.findViewById(R.id.progress_bar);
-		planRouteProgressBar.setVisibility(View.VISIBLE);
+		View progressBarContainer = LayoutInflater.from(getMapActivity()).inflate(R.layout.bottom_sheet_with_progress_bar, null);
+		uploadPhotoProgressBar = progressBarContainer.findViewById(R.id.progress_bar);
+		uploadPhotoProgressBar.setVisibility(View.VISIBLE);
+
 
 		int padding = getResources().getDimensionPixelSize(R.dimen.content_padding_small);
 		items.add(new DividerSpaceItem(requireContext(), padding));
-		
+
+	}
+
+
+	protected void setTextId() {
+		View progressBarContainer = LayoutInflater.from(getMapActivity()).inflate(R.layout.bottom_sheet_with_progress_bar, null);
+
+		TextViewEx progressTitle = progressBarContainer.findViewById(R.id.title);
+		progressTitle.setText(R.string.select_color);
+	}
+
+	public void onProgressUpdate(Integer... values) {
+			uploadPhotoProgressBar.setProgress(values[0]);
+		}
+
+	public void onUploadingFinished() {
+		uploadPhotoProgressBar.setProgress(1);
+		setDismissButtonTextId(R.string.shared_string_close);
+		setTextId();
+
 	}
 
 	@Override
 	protected boolean useVerticalButtons() {
 		return true;
 	}
-
-//	@Override
-//	protected int getRightBottomButtonTextId() {
-//		return R.string.shared_string_dismiss;
-//	}
 
 	@Override
 	protected int getDismissButtonTextId() {

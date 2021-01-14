@@ -36,6 +36,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
 
 import net.osmand.AndroidUtils;
 import net.osmand.PlatformUtil;
@@ -84,6 +86,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -474,34 +477,30 @@ public class MenuBuilder {
 			@Override
 			public void onResult(int resultCode, Intent resultData) {
 				if (resultData != null) {
-					new PhotoUploadTask().execute(resultData.getData());
+					new BaseUploadAsyncTask(getMapActivity()).execute(resultData.getData());
 				}
 			}
 		}));
 	}
 
-	public class PhotoUploadTask extends AsyncTask<Uri, Integer, Long> {
-		private final Callback callback;
+	public class BaseUploadAsyncTask extends AsyncTask<Uri, Integer, Long> {
 
-		public interface Callback {
-			void onProgressUpdate(Integer progress);
+		protected OsmandApplication app;
+		protected WeakReference<FragmentActivity> activityRef;
+		protected UploadPhotoWithProgressBarBottomSheet progress;
+
+		public BaseUploadAsyncTask(@NonNull FragmentActivity activity) {
+			app = (OsmandApplication) activity.getApplicationContext();
+			activityRef = new WeakReference<>(activity);
 		}
 
-		public PhotoUploadTask(Callback callback) {
-			this.callback = callback;
-		}
-
-		protected void onPreExecute(){
-			UploadPhotoWithProgressBarBottomSheet.showInstance(mapActivity.getSupportFragmentManager());
-		}
-
-		protected Long doInBackground(Uri... params) {
+		protected Long doInBackground(Uri... uris) {
 			InputStream inputStream = null;
-			int count = params.length;
+			int count = uris.length;
 			long totalSize = 0;
 			for (int i = 0; i <= count; i++) {
 				try {
-					inputStream = app.getContentResolver().openInputStream(params[i]);
+					inputStream = app.getContentResolver().openInputStream(uris[i]);
 					int length = inputStream.available();
 					if (inputStream != null) {
 						Thread.sleep(1000);
@@ -521,13 +520,32 @@ public class MenuBuilder {
 				}
 			}
 			return totalSize;
+	}
+
+		@Override
+		protected void onProgressUpdate(Integer... values) {
+			if (progress != null) {
+				progress.onProgressUpdate(values[0]);
+			}
 		}
 
-		protected void onProgressUpdate(Integer... progress) {
-			publishProgress(progress[0]);
+		@Override
+		protected void onPostExecute(Long aLong) {
+			if (progress != null) {
+				progress.onUploadingFinished();
+			}
 		}
 
-		protected void onPostExecute(Long result) {
+		@Override
+		protected void onPreExecute() {
+			FragmentActivity activity = activityRef.get();
+			if (AndroidUtils.isActivityNotDestroyed(activity)) {
+				FragmentManager fragmentManager = activity.getSupportFragmentManager();
+				if (!fragmentManager.isStateSaved()) {
+					progress = new UploadPhotoWithProgressBarBottomSheet();
+					progress.show(fragmentManager, UploadPhotoWithProgressBarBottomSheet.TAG);
+				}
+			}
 		}
 	}
 
