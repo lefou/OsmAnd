@@ -12,6 +12,8 @@
 
 -->
 
+    <string name="upload_photo_completed">Upload completed</string>
+    <string name="upload_photo">Uploading</string>
     <string name="delete_online_routing_engine">Delete this online routing engine?</string>
     <string name="message_name_is_already_exists">The name is already exists</string>
     <string name="message_server_error">Server error: %1$s</string>

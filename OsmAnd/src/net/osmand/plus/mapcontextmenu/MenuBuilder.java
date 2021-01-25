@@ -14,8 +14,6 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -36,6 +34,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.fragment.app.FragmentActivity;
+import androidx.fragment.app.FragmentManager;
 
 import net.osmand.AndroidUtils;
 import net.osmand.PlatformUtil;
@@ -53,7 +53,9 @@ import net.osmand.plus.R;
 import net.osmand.plus.UiUtilities;
 import net.osmand.plus.Version;
 import net.osmand.plus.activities.ActivityResultListener;
+import net.osmand.plus.activities.ActivityResultListener.OnActivityResultListener;
 import net.osmand.plus.activities.MapActivity;
+import net.osmand.plus.dialogs.UploadPhotoWithProgressBarBottomSheet;
 import net.osmand.plus.helpers.FontCache;
 import net.osmand.plus.mapcontextmenu.builders.cards.AbstractCard;
 import net.osmand.plus.mapcontextmenu.builders.cards.CardsRowBuilder;
@@ -85,6 +87,7 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -121,22 +124,22 @@ public class MenuBuilder {
 	private boolean showOnlinePhotos = true;
 	protected List<Amenity> nearestWiki = new ArrayList<>();
 	protected List<Amenity> nearestPoi = new ArrayList<>();
-	private List<OsmandPlugin> menuPlugins = new ArrayList<>();
+	private final List<OsmandPlugin> menuPlugins = new ArrayList<>();
 	@Nullable
 	private CardsRowBuilder onlinePhotoCardsRow;
 	private List<AbstractCard> onlinePhotoCards;
 
 	private CollapseExpandListener collapseExpandListener;
 
-	private String preferredMapLang;
+	private final String preferredMapLang;
 	private String preferredMapAppLang;
-	private boolean transliterateNames;
+	private final boolean transliterateNames;
 	private View view;
 	private View photoButton;
 
 	private final OpenDBAPI openDBAPI = new OpenDBAPI();
 	private String[] placeId = new String[0];
-	private GetImageCardsListener imageCardListener = new GetImageCardsListener() {
+	private final GetImageCardsListener imageCardListener = new GetImageCardsListener() {
 		@Override
 		public void onPostProcess(List<ImageCard> cardList) {
 			processOnlinePhotosCards(cardList);
@@ -423,7 +426,7 @@ public class MenuBuilder {
 				if (false) {
 					AddPhotosBottomSheetDialogFragment.showInstance(mapActivity.getSupportFragmentManager());
 				} else {
-					registerResultListener(view);
+					registerResultListener();
 					final String baseUrl = OPRConstants.getBaseUrl(app);
 					final String name = app.getSettings().OPR_USERNAME.get();
 					final String privateKey = app.getSettings().OPR_ACCESS_TOKEN.get();
@@ -470,113 +473,157 @@ public class MenuBuilder {
 				false, null, false);
 	}
 
-	private void registerResultListener(final View view) {
-		mapActivity.registerActivityResultListener(new ActivityResultListener(PICK_IMAGE, new ActivityResultListener.
-				OnActivityResultListener() {
+	private void registerResultListener() {
+		mapActivity.registerActivityResultListener(new ActivityResultListener(PICK_IMAGE, new OnActivityResultListener() {
 			@Override
 			public void onResult(int resultCode, Intent resultData) {
 				if (resultData != null) {
-					handleSelectedImage(view, resultData.getData());
+					new BaseUploadAsyncTask(mapActivity, getLatLon(), placeId, getAdditionalCardParams(), imageCardListener).execute(resultData.getData());
 				}
 			}
 		}));
 	}
 
-	private void handleSelectedImage(final View view, final Uri uri) {
-		Thread t = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				InputStream inputStream = null;
-				try {
-					inputStream = app.getContentResolver().openInputStream(uri);
-					if (inputStream != null) {
-						uploadImageToPlace(inputStream);
-					}
-				} catch (Exception e) {
-					LOG.error(e);
-					String str = app.getString(R.string.cannot_upload_image);
-					showToastMessage(str);
-				} finally {
-					Algorithms.closeStream(inputStream);
+	public static class BaseUploadAsyncTask extends AsyncTask<Uri, Integer, Void> {
+
+		private final OsmandApplication app;
+		private final WeakReference<MapActivity> activityRef;
+		private UploadPhotoWithProgressBarBottomSheet progress;
+
+		private final OpenDBAPI openDBAPI = new OpenDBAPI();
+		private final LatLon latLon;
+		private final String[] placeId;
+		private final Map<String, String> params;
+		private final GetImageCardsListener imageCardListener;
+
+		public BaseUploadAsyncTask(MapActivity activity, LatLon latLon, String[] placeId,
+								   Map<String, String> params, GetImageCardsListener imageCardListener) {
+			app = (OsmandApplication) activity.getApplicationContext();
+			activityRef = new WeakReference<>(activity);
+			this.latLon = latLon;
+			this.params = params;
+			this.placeId = placeId;
+			this.imageCardListener = imageCardListener;
+		}
+
+		@Override
+		protected void onPreExecute() {
+			FragmentActivity activity = activityRef.get();
+			if (AndroidUtils.isActivityNotDestroyed(activity)) {
+				FragmentManager fragmentManager = activity.getSupportFragmentManager();
+				if (!fragmentManager.isStateSaved()) {
+					progress = new UploadPhotoWithProgressBarBottomSheet();
+					progress.show(fragmentManager, UploadPhotoWithProgressBarBottomSheet.TAG);
 				}
 			}
-		});
-		t.start();
-	}
+		}
 
-	private void uploadImageToPlace(InputStream image) {
-		InputStream serverData = new ByteArrayInputStream(compressImage(image));
-		final String baseUrl = OPRConstants.getBaseUrl(app);
-		String url = baseUrl + "api/ipfs/image";
-		String response = NetworkUtils.sendPostDataRequest(url, serverData);
-		if (response != null) {
-			int res = 0;
+		protected Void doInBackground(Uri... uris) {
+			for (int i = 0; i < uris.length; i++) {
+				if (isCancelled()) {
+					break;
+				}
+				Uri uri = uris[i];
+				handleSelectedImage(uri);
+				publishProgress(i);
+			}
+			return null;
+		}
+
+		private void handleSelectedImage(Uri uri) {
+			InputStream inputStream = null;
 			try {
-				StringBuilder error = new StringBuilder();
-				String privateKey = app.getSettings().OPR_ACCESS_TOKEN.get();
-				String username = app.getSettings().OPR_USERNAME.get();
-				res = openDBAPI.uploadImage(
-						placeId,
-						baseUrl,
-						privateKey,
-						username,
-						response, error);
-				if (res != 200) {
-					showToastMessage(error.toString());
-				} else {
-					//ok, continue
+				inputStream = app.getContentResolver().openInputStream(uri);
+				if (inputStream != null) {
+					uploadImageToPlace(inputStream);
 				}
-			} catch (FailedVerificationException e) {
+			} catch (Exception e) {
 				LOG.error(e);
-				checkTokenAndShowScreen();
+				String str = app.getString(R.string.cannot_upload_image);
+				app.showToastMessage(str);
+			} finally {
+				Algorithms.closeStream(inputStream);
 			}
-			if (res != 200) {
-				//image was uploaded but not added to blockchain
-				checkTokenAndShowScreen();
-			} else {
-				String str = app.getString(R.string.successfully_uploaded_pattern, 1, 1);
-				showToastMessage(str);
-				//refresh the image
-				execute(new GetImageCardsTask(mapActivity, getLatLon(), getAdditionalCardParams(), imageCardListener));
-			}
-		} else {
-			checkTokenAndShowScreen();
 		}
-	}
 
-	private void showToastMessage(final String str) {
-		new Handler(Looper.getMainLooper()).post(new Runnable() {
-			@Override
-			public void run() {
-				Toast.makeText(mapActivity.getBaseContext(), str, Toast.LENGTH_LONG).show();
-			}
-		});
-	}
-
-	//This method runs on non main thread
-	private void checkTokenAndShowScreen() {
-		final String baseUrl = OPRConstants.getBaseUrl(app);
-		final String name = app.getSettings().OPR_USERNAME.get();
-		final String privateKey = app.getSettings().OPR_ACCESS_TOKEN.get();
-		if (openDBAPI.checkPrivateKeyValid(baseUrl, name, privateKey)) {
-			String str = app.getString(R.string.cannot_upload_image);
-			showToastMessage(str);
-		} else {
-			app.runInUIThread(new Runnable() {
-				@Override
-				public void run() {
-					OprStartFragment.showInstance(mapActivity.getSupportFragmentManager());
+		private void uploadImageToPlace(InputStream image) {
+			InputStream serverData = new ByteArrayInputStream(compressImage(image));
+			final String baseUrl = OPRConstants.getBaseUrl(app);
+			String url = baseUrl + "api/ipfs/image";
+			String response = NetworkUtils.sendPostDataRequest(url, serverData);
+			if (response != null) {
+				int res = 0;
+				try {
+					StringBuilder error = new StringBuilder();
+					String privateKey = app.getSettings().OPR_ACCESS_TOKEN.get();
+					String username = app.getSettings().OPR_USERNAME.get();
+					res = openDBAPI.uploadImage(
+							placeId,
+							baseUrl,
+							privateKey,
+							username,
+							response, error);
+					if (res != 200) {
+						app.showToastMessage(error.toString());
+					} else {
+						//ok, continue
+					}
+				} catch (FailedVerificationException e) {
+					LOG.error(e);
+					checkTokenAndShowScreen();
 				}
-			});
+				if (res != 200) {
+					//image was uploaded but not added to blockchain
+					checkTokenAndShowScreen();
+				} else {
+					String str = app.getString(R.string.successfully_uploaded_pattern, 1, 1);
+					app.showToastMessage(str);
+					//refresh the image
+					MapActivity activity = activityRef.get();
+					if (activity != null) {
+						MenuBuilder.execute(new GetImageCardsTask(activity, latLon, params, imageCardListener));
+					}
+				}
+			} else {
+				checkTokenAndShowScreen();
+			}
 		}
-	}
 
-	private byte[] compressImage(InputStream image) {
-		BufferedInputStream bufferedInputStream = new BufferedInputStream(image);
-		Bitmap bmp = BitmapFactory.decodeStream(bufferedInputStream);
-		ByteArrayOutputStream os = new ByteArrayOutputStream();
-		bmp.compress(Bitmap.CompressFormat.PNG, 70, os);
-		return os.toByteArray();
+		//This method runs on non main thread
+		private void checkTokenAndShowScreen() {
+			final String baseUrl = OPRConstants.getBaseUrl(app);
+			final String name = app.getSettings().OPR_USERNAME.get();
+			final String privateKey = app.getSettings().OPR_ACCESS_TOKEN.get();
+			if (openDBAPI.checkPrivateKeyValid(baseUrl, name, privateKey)) {
+				String str = app.getString(R.string.cannot_upload_image);
+				app.showToastMessage(str);
+			} else {
+				app.runInUIThread(new Runnable() {
+					@Override
+					public void run() {
+						FragmentActivity activity = activityRef.get();
+						if (activity != null) {
+							OprStartFragment.showInstance(activity.getSupportFragmentManager());
+						}
+					}
+				});
+			}
+		}
+
+		private byte[] compressImage(InputStream image) {
+			BufferedInputStream bufferedInputStream = new BufferedInputStream(image);
+			Bitmap bmp = BitmapFactory.decodeStream(bufferedInputStream);
+			ByteArrayOutputStream os = new ByteArrayOutputStream();
+			bmp.compress(Bitmap.CompressFormat.PNG, 70, os);
+			return os.toByteArray();
+		}
+
+		@Override
+		protected void onProgressUpdate(Integer... values) {
+			if (progress != null) {
+				progress.onProgressUpdate(values[0]);
+			}
+		}
 	}
 
 	private void startLoadingImages() {
@@ -632,29 +679,29 @@ public class MenuBuilder {
 	}
 
 	public View buildRow(View view, int iconId, String buttonText, String text, int textColor,
-	                     boolean collapsable, final CollapsableView collapsableView,
-	                     boolean needLinks, int textLinesLimit, boolean isUrl, OnClickListener onClickListener, boolean matchWidthDivider) {
+						 boolean collapsable, final CollapsableView collapsableView,
+						 boolean needLinks, int textLinesLimit, boolean isUrl, OnClickListener onClickListener, boolean matchWidthDivider) {
 		return buildRow(view, iconId == 0 ? null : getRowIcon(iconId), buttonText, text, textColor, null, collapsable, collapsableView,
 				needLinks, textLinesLimit, isUrl, onClickListener, matchWidthDivider);
 	}
 
 	public View buildRow(final View view, Drawable icon, final String buttonText, final String text, int textColor, String secondaryText,
-	                     boolean collapsable, final CollapsableView collapsableView, boolean needLinks,
-	                     int textLinesLimit, boolean isUrl, OnClickListener onClickListener, boolean matchWidthDivider) {
+						 boolean collapsable, final CollapsableView collapsableView, boolean needLinks,
+						 int textLinesLimit, boolean isUrl, OnClickListener onClickListener, boolean matchWidthDivider) {
 		return buildRow(view, icon, buttonText, null, text, textColor, secondaryText, collapsable, collapsableView,
 				needLinks, textLinesLimit, isUrl, false, false, onClickListener, matchWidthDivider);
 	}
 
 	public View buildRow(View view, int iconId, String buttonText, String text, int textColor,
-	                     boolean collapsable, final CollapsableView collapsableView,
-	                     boolean needLinks, int textLinesLimit, boolean isUrl, boolean isNumber, boolean isEmail, OnClickListener onClickListener, boolean matchWidthDivider) {
+						 boolean collapsable, final CollapsableView collapsableView,
+						 boolean needLinks, int textLinesLimit, boolean isUrl, boolean isNumber, boolean isEmail, OnClickListener onClickListener, boolean matchWidthDivider) {
 		return buildRow(view, iconId == 0 ? null : getRowIcon(iconId), buttonText, null, text, textColor, null, collapsable, collapsableView,
 				needLinks, textLinesLimit, isUrl, isNumber, isEmail, onClickListener, matchWidthDivider);
 	}
 
 	public View buildRow(final View view, Drawable icon, final String buttonText, final String textPrefix, final String text,
-	                     int textColor, String secondaryText, boolean collapsable, final CollapsableView collapsableView, boolean needLinks,
-	                     int textLinesLimit, boolean isUrl, boolean isNumber, boolean isEmail, OnClickListener onClickListener, boolean matchWidthDivider) {
+						 int textColor, String secondaryText, boolean collapsable, final CollapsableView collapsableView, boolean needLinks,
+						 int textLinesLimit, boolean isUrl, boolean isNumber, boolean isEmail, OnClickListener onClickListener, boolean matchWidthDivider) {
 
 		if (!isFirstRow()) {
 			buildRowDivider(view);
@@ -862,7 +909,7 @@ public class MenuBuilder {
 	}
 
 	public View buildDescriptionRow(final View view, final String textPrefix, final String description, int textColor,
-	                                int textLinesLimit, boolean matchWidthDivider) {
+									int textLinesLimit, boolean matchWidthDivider) {
 		OnClickListener clickListener = new OnClickListener() {
 			@Override
 			public void onClick(View v) {
@@ -984,8 +1031,8 @@ public class MenuBuilder {
 	}
 
 	public void addPlainMenuItem(int iconId, String text, boolean needLinks, boolean isUrl,
-	                             boolean collapsable, CollapsableView collapsableView,
-	                             OnClickListener onClickListener) {
+								 boolean collapsable, CollapsableView collapsableView,
+								 OnClickListener onClickListener) {
 		plainMenuItems.add(new PlainMenuItem(iconId, null, text, needLinks, isUrl, collapsable, collapsableView, onClickListener));
 	}
 
