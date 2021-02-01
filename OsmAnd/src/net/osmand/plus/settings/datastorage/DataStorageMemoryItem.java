@@ -1,4 +1,4 @@
-package net.osmand.plus.settings.fragments;
+package net.osmand.plus.settings.datastorage;
 
 public class DataStorageMemoryItem {
 	public final static int EXTENSIONS = 0;
@@ -10,7 +10,11 @@ public class DataStorageMemoryItem {
 	private Directory[] directories;
 	private long usedMemoryBytes;
 
-	private DataStorageMemoryItem(String key, String[] extensions, String[] prefixes, long usedMemoryBytes, Directory[] directories) {
+	private DataStorageMemoryItem(String key,
+	                              String[] extensions,
+	                              String[] prefixes,
+	                              long usedMemoryBytes,
+	                              Directory[] directories) {
 		this.key = key;
 		this.extensions = extensions;
 		this.prefixes = prefixes;

@@ -1,4 +1,4 @@
-package net.osmand.plus.settings.fragments;
+package net.osmand.plus.settings.datastorage;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -34,6 +34,7 @@ import net.osmand.plus.activities.OsmandActionBarActivity;
 import net.osmand.plus.download.DownloadActivity;
 import net.osmand.plus.settings.bottomsheets.ChangeDataStorageBottomSheet;
 import net.osmand.plus.settings.bottomsheets.SelectFolderBottomSheet;
+import net.osmand.plus.settings.fragments.BaseSettingsFragment;
 import net.osmand.util.Algorithms;
 
 import java.io.File;
@@ -44,10 +45,10 @@ import java.lang.ref.WeakReference;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 
-import static net.osmand.plus.settings.fragments.DataStorageHelper.INTERNAL_STORAGE;
-import static net.osmand.plus.settings.fragments.DataStorageHelper.MANUALLY_SPECIFIED;
-import static net.osmand.plus.settings.fragments.DataStorageHelper.OTHER_MEMORY;
-import static net.osmand.plus.settings.fragments.DataStorageHelper.TILES_MEMORY;
+import static net.osmand.plus.settings.datastorage.DataStorageHelper.INTERNAL_STORAGE;
+import static net.osmand.plus.settings.datastorage.DataStorageHelper.MANUALLY_SPECIFIED;
+import static net.osmand.plus.settings.datastorage.DataStorageHelper.OTHER_MEMORY;
+import static net.osmand.plus.settings.datastorage.DataStorageHelper.TILES_MEMORY;
 import static net.osmand.plus.settings.bottomsheets.ChangeDataStorageBottomSheet.CHOSEN_DIRECTORY;
 import static net.osmand.plus.settings.bottomsheets.ChangeDataStorageBottomSheet.MOVE_DATA;
 import static net.osmand.plus.settings.bottomsheets.SelectFolderBottomSheet.NEW_PATH;
@@ -69,8 +70,8 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 	private DataStorageHelper dataStorageHelper;
 	private boolean calculateTilesBtnPressed;
 	
-	private DataStorageHelper.RefreshMemoryUsedInfo calculateMemoryTask;
-	private DataStorageHelper.RefreshMemoryUsedInfo calculateTilesMemoryTask;
+	private RefreshUsedMemoryTask calculateMemoryTask;
+	private RefreshUsedMemoryTask calculateTilesMemoryTask;
 
 	private OsmandApplication app;
 	private OsmandActionBarActivity activity;
@@ -128,7 +129,8 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 	}
 
 	@Override
-	public boolean onPreferenceChange(Preference preference, Object newValue) {
+	public boolean onPreferenceChange(Preference preference,
+	                                  Object newValue) {
 		super.onPreferenceChange(preference, newValue);
 
 		if (newValue instanceof Bundle) {
@@ -192,7 +194,8 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 	}
 
 	@Override
-	protected void onBindPreferenceViewHolder(Preference preference, PreferenceViewHolder holder) {
+	protected void onBindPreferenceViewHolder(Preference preference,
+	                                          PreferenceViewHolder holder) {
 		super.onBindPreferenceViewHolder(preference, holder);
 		String key = preference.getKey();
 		if (key == null) {
@@ -335,11 +338,12 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 		}
 	}
 
-	private void moveData(final DataStorageMenuItem currentStorage, final DataStorageMenuItem newStorage) {
+	private void moveData(final DataStorageMenuItem currentStorage,
+	                      final DataStorageMenuItem newStorage) {
 		File fromDirectory = new File(currentStorage.getDirectory());
 		File toDirectory = new File(newStorage.getDirectory());
 		@SuppressLint("StaticFieldLeak")
-		MoveFilesToDifferentDirectory task = new MoveFilesToDifferentDirectory(activity, fromDirectory, toDirectory) {
+		MoveFilesTask task = new MoveFilesTask(activity, fromDirectory, toDirectory) {
 
 
 			@NonNull
@@ -405,7 +409,10 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 		task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
 	}
 
-	private void confirm(OsmandApplication app, OsmandActionBarActivity activity, DataStorageMenuItem newStorageDirectory, boolean silentRestart) {
+	private void confirm(OsmandApplication app,
+	                     OsmandActionBarActivity activity,
+	                     DataStorageMenuItem newStorageDirectory,
+	                     boolean silentRestart) {
 		String newDirectory = newStorageDirectory.getDirectory();
 		int type = newStorageDirectory.getType();
 		File newDirectoryFile = new File(newDirectory);
@@ -454,7 +461,7 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 	}
 
 	protected void reloadData() {
-		new ReloadData(activity, app).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void) null);
+		new ReloadDataTask(activity, app).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void) null);
 	}
 
 	@Override
@@ -470,7 +477,7 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 		}
 	}
 
-	public static class MoveFilesToDifferentDirectory extends AsyncTask<Void, Void, Boolean> {
+	public static class MoveFilesTask extends AsyncTask<Void, Void, Boolean> {
 
 		protected WeakReference<OsmandActionBarActivity> activity;
 		private WeakReference<Context> context;
@@ -486,7 +493,7 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 		private long failedSize;
 		private String exceptionMessage;
 
-		public MoveFilesToDifferentDirectory(OsmandActionBarActivity activity, File from, File to) {
+		public MoveFilesTask(OsmandActionBarActivity activity, File from, File to) {
 			this.activity = new WeakReference<>(activity);
 			this.context = new WeakReference<>((Context) activity);
 			this.from = from;
@@ -626,12 +633,12 @@ public class DataStorageFragment extends BaseSettingsFragment implements DataSto
 
 	}
 
-	public static class ReloadData extends AsyncTask<Void, Void, Boolean> {
+	public static class ReloadDataTask extends AsyncTask<Void, Void, Boolean> {
 		private WeakReference<Context> ctx;
 		protected ProgressImplementation progress;
 		private OsmandApplication app;
 
-		public ReloadData(Context ctx, OsmandApplication app) {
+		public ReloadDataTask(Context ctx, OsmandApplication app) {
 			this.ctx = new WeakReference<>(ctx);
 			this.app = app;
 		}

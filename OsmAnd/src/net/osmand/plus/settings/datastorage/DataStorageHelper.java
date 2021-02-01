@@ -1,7 +1,9 @@
-package net.osmand.plus.settings.fragments;
+package net.osmand.plus.settings.datastorage;
 
-import android.os.AsyncTask;
 import android.os.Build;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import net.osmand.IndexConstants;
 import net.osmand.ValueHolder;
@@ -13,10 +15,9 @@ import java.io.File;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 
-import static net.osmand.plus.settings.fragments.DataStorageFragment.UI_REFRESH_TIME_MS;
-import static net.osmand.plus.settings.fragments.DataStorageMemoryItem.Directory;
-import static net.osmand.plus.settings.fragments.DataStorageMemoryItem.EXTENSIONS;
-import static net.osmand.plus.settings.fragments.DataStorageMemoryItem.PREFIX;
+import static net.osmand.plus.settings.datastorage.DataStorageMemoryItem.Directory;
+import static net.osmand.plus.settings.datastorage.DataStorageMemoryItem.EXTENSIONS;
+import static net.osmand.plus.settings.datastorage.DataStorageMemoryItem.PREFIX;
 
 public class DataStorageHelper {
 	public final static String INTERNAL_STORAGE = "internal_storage";
@@ -26,7 +27,7 @@ public class DataStorageHelper {
 	public final static String MANUALLY_SPECIFIED = "manually_specified";
 
 	public final static String MAPS_MEMORY = "maps_memory_used";
-	public final static String SRTM_AND_HILLSHADE_MEMORY = "contour_lines_and_hillshade_memory";
+	public final static String SRTM_SLOPE_HILLSHADE_MEMORY = "srtm_slope_hillshade_memory_used";
 	public final static String TRACKS_MEMORY = "tracks_memory_used";
 	public final static String NOTES_MEMORY = "notes_memory_used";
 	public final static String TILES_MEMORY = "tiles_memory_used";
@@ -38,7 +39,7 @@ public class DataStorageHelper {
 
 	private ArrayList<DataStorageMemoryItem> memoryItems = new ArrayList<>();
 	private DataStorageMemoryItem mapsMemory;
-	private DataStorageMemoryItem srtmAndHillshadeMemory;
+	private DataStorageMemoryItem srtmSlopeHillshadeMemory;
 	private DataStorageMemoryItem tracksMemory;
 	private DataStorageMemoryItem notesMemory;
 	private DataStorageMemoryItem tilesMemory;
@@ -47,16 +48,11 @@ public class DataStorageHelper {
 	private int currentStorageType;
 	private String currentStoragePath;
 
-	public DataStorageHelper(OsmandApplication app) {
+	public DataStorageHelper(@NonNull OsmandApplication app) {
 		prepareData(app);
 	}
 
-	private void prepareData(OsmandApplication app) {
-
-		if (app == null) {
-			return;
-		}
-
+	private void prepareData(@NonNull OsmandApplication app) {
 		OsmandSettings settings = app.getSettings();
 
 		if (settings.getExternalStorageDirectoryTypeV19() >= 0) {
@@ -92,7 +88,7 @@ public class DataStorageHelper {
 					.createItem();
 			addItem(internalStorageItem);
 
-			//shared_storage
+			//shared storage
 			dir = settings.getDefaultInternalStorage();
 			path = dir.getAbsolutePath();
 			iconId = R.drawable.ic_action_phone;
@@ -168,7 +164,7 @@ public class DataStorageHelper {
 		initMemoryUsed(app);
 	}
 
-	private void initMemoryUsed(OsmandApplication app) {
+	private void initMemoryUsed(@NonNull OsmandApplication app) {
 		mapsMemory = DataStorageMemoryItem.builder()
 				.setKey(MAPS_MEMORY)
 				.setExtensions(IndexConstants.BINARY_MAP_INDEX_EXT)
@@ -181,15 +177,15 @@ public class DataStorageHelper {
 				.createItem();
 		memoryItems.add(mapsMemory);
 
-		srtmAndHillshadeMemory = DataStorageMemoryItem.builder()
-				.setKey(SRTM_AND_HILLSHADE_MEMORY)
+		srtmSlopeHillshadeMemory = DataStorageMemoryItem.builder()
+				.setKey(SRTM_SLOPE_HILLSHADE_MEMORY)
 				.setExtensions(IndexConstants.BINARY_SRTM_MAP_INDEX_EXT)
 				.setDirectories(
 						new Directory(app.getAppPath(IndexConstants.SRTM_INDEX_DIR).getAbsolutePath(), true, EXTENSIONS, false),
 						new Directory(app.getAppPath(IndexConstants.TILES_INDEX_DIR).getAbsolutePath(), false, PREFIX, true))
 				.setPrefixes("Hillshade")
 				.createItem();
-		memoryItems.add(srtmAndHillshadeMemory);
+		memoryItems.add(srtmSlopeHillshadeMemory);
 
 		tracksMemory = DataStorageMemoryItem.builder()
 				.setKey(TRACKS_MEMORY)
@@ -233,7 +229,7 @@ public class DataStorageHelper {
 		return currentDataStorage;
 	}
 
-	private void addItem(DataStorageMenuItem item) {
+	private void addItem(@NonNull DataStorageMenuItem item) {
 		if (currentStorageType == item.getType() && currentStoragePath.equals(item.getDirectory())) {
 			currentDataStorage = item;
 		}
@@ -244,7 +240,8 @@ public class DataStorageHelper {
 		return manuallySpecified;
 	}
 
-	public DataStorageMenuItem getStorage(String key) {
+	@Nullable
+	public DataStorageMenuItem getStorage(@Nullable String key) {
 		if (menuItems != null && key != null) {
 			for (DataStorageMenuItem menuItem : menuItems) {
 				if (key.equals(menuItem.getKey())) {
@@ -267,190 +264,18 @@ public class DataStorageHelper {
 		return memoryItems;
 	}
 
-	public RefreshMemoryUsedInfo calculateMemoryUsedInfo(UpdateMemoryInfoUIAdapter listener) {
+	public RefreshUsedMemoryTask calculateMemoryUsedInfo(UpdateMemoryInfoUIAdapter listener) {
 		File rootDir = new File(currentStoragePath);
-		RefreshMemoryUsedInfo task = new RefreshMemoryUsedInfo(listener, otherMemory, rootDir, null, null, OTHER_MEMORY);
-		task.execute(mapsMemory, srtmAndHillshadeMemory, tracksMemory, notesMemory);
+		RefreshUsedMemoryTask task = new RefreshUsedMemoryTask(listener, otherMemory, rootDir, null, null, OTHER_MEMORY);
+		task.execute(mapsMemory, srtmSlopeHillshadeMemory, tracksMemory, notesMemory);
 		return task;
 	}
 
-	public RefreshMemoryUsedInfo calculateTilesMemoryUsed(UpdateMemoryInfoUIAdapter listener) {
+	public RefreshUsedMemoryTask calculateTilesMemoryUsed(UpdateMemoryInfoUIAdapter listener) {
 		File rootDir = new File(tilesMemory.getDirectories()[0].getAbsolutePath());
-		RefreshMemoryUsedInfo task = new RefreshMemoryUsedInfo(listener, otherMemory, rootDir, null, srtmAndHillshadeMemory.getPrefixes(), TILES_MEMORY);
+		RefreshUsedMemoryTask task = new RefreshUsedMemoryTask(listener, otherMemory, rootDir, null, srtmSlopeHillshadeMemory.getPrefixes(), TILES_MEMORY);
 		task.execute(tilesMemory);
 		return task;
-	}
-
-	public static class RefreshMemoryUsedInfo extends AsyncTask<DataStorageMemoryItem, Void, Void> {
-		private UpdateMemoryInfoUIAdapter listener;
-		private File rootDir;
-		private DataStorageMemoryItem otherMemory;
-		private String[] directoriesToAvoid;
-		private String[] prefixesToAvoid;
-		private String taskKey;
-		private long lastRefreshTime;
-
-		public RefreshMemoryUsedInfo(UpdateMemoryInfoUIAdapter listener, DataStorageMemoryItem otherMemory, File rootDir, String[] directoriesToAvoid, String[] prefixesToAvoid, String taskKey) {
-			this.listener = listener;
-			this.otherMemory = otherMemory;
-			this.rootDir = rootDir;
-			this.directoriesToAvoid = directoriesToAvoid;
-			this.prefixesToAvoid = prefixesToAvoid;
-			this.taskKey = taskKey;
-		}
-
-		@Override
-		protected Void doInBackground(DataStorageMemoryItem... items) {
-			lastRefreshTime = System.currentTimeMillis();
-			if (rootDir.canRead()) {
-				calculateMultiTypes(rootDir, items);
-			}
-			return null;
-		}
-
-		private void calculateMultiTypes(File rootDir, DataStorageMemoryItem... items) {
-			File[] subFiles = rootDir.listFiles();
-
-			for (File file : subFiles) {
-				if (isCancelled()) {
-					break;
-				}
-				nextFile : {
-					if (file.isDirectory()) {
-						//check current directory should be avoid
-						if (directoriesToAvoid != null) {
-							for (String directoryToAvoid : directoriesToAvoid) {
-								if (file.getAbsolutePath().equals(directoryToAvoid)) {
-									break nextFile;
-								}
-							}
-						}
-						//check current directory matched items type
-						for (DataStorageMemoryItem item : items) {
-							Directory[] directories = item.getDirectories();
-							if (directories == null) {
-								continue;
-							}
-							for (Directory dir : directories) {
-								if (file.getAbsolutePath().equals(dir.getAbsolutePath())
-										|| (file.getAbsolutePath().startsWith(dir.getAbsolutePath()))) {
-									if (dir.isGoDeeper()) {
-										calculateMultiTypes(file, items);
-										break nextFile;
-									} else if (dir.isSkipOther()) {
-										break nextFile;
-									}
-								}
-							}
-						}
-						//current directory did not match to any type
-						otherMemory.addBytes(getDirectorySize(file));
-					} else if (file.isFile()) {
-						//check current file should be avoid
-						if (prefixesToAvoid != null) {
-							for (String prefixToAvoid : prefixesToAvoid) {
-								if (file.getName().toLowerCase().startsWith(prefixToAvoid.toLowerCase())) {
-									break nextFile;
-								}
-							}
-						}
-						//check current file matched items type
-						for (DataStorageMemoryItem item : items) {
-							Directory[] directories = item.getDirectories();
-							if (directories == null) {
-								continue;
-							}
-							for (Directory dir : directories) {
-								if (rootDir.getAbsolutePath().equals(dir.getAbsolutePath())
-										|| (rootDir.getAbsolutePath().startsWith(dir.getAbsolutePath()) && dir.isGoDeeper())) {
-									int checkingType = dir.getCheckingType();
-									switch (checkingType) {
-										case EXTENSIONS : {
-											String[] extensions = item.getExtensions();
-											if (extensions != null) {
-												for (String extension : extensions) {
-													if (file.getAbsolutePath().endsWith(extension)) {
-														item.addBytes(file.length());
-														break nextFile;
-													}
-												}
-											} else {
-												item.addBytes(file.length());
-												break nextFile;
-											}
-											break ;
-										}
-										case PREFIX : {
-											String[] prefixes = item.getPrefixes();
-											if (prefixes != null) {
-												for (String prefix : prefixes) {
-													if (file.getName().toLowerCase().startsWith(prefix.toLowerCase())) {
-														item.addBytes(file.length());
-														break nextFile;
-													}
-												}
-											} else {
-												item.addBytes(file.length());
-												break nextFile;
-											}
-											break ;
-										}
-									}
-									if (dir.isSkipOther()) {
-										break nextFile;
-									}
-								}
-							}
-						}
-						//current file did not match any type
-						otherMemory.addBytes(file.length());
-					}
-				}
-				refreshUI();
-			}
-		}
-
-		private long getDirectorySize(File dir) {
-			long bytes = 0;
-			if (dir.isDirectory()) {
-				File[] files = dir.listFiles();
-				for (File file : files) {
-					if (isCancelled()) {
-						break;
-					}
-					if (file.isDirectory()) {
-						bytes += getDirectorySize(file);
-					} else if (file.isFile()) {
-						bytes += file.length();
-					}
-				}
-			}
-			return bytes;
-		}
-
-		@Override
-		protected void onProgressUpdate(Void... values) {
-			super.onProgressUpdate(values);
-			if (listener != null) {
-				listener.onMemoryInfoUpdate();
-			}
-		}
-
-		@Override
-		protected void onPostExecute(Void aVoid) {
-			super.onPostExecute(aVoid);
-			if (listener != null) {
-				listener.onFinishUpdating(taskKey);
-			}
-		}
-		
-		private void refreshUI() {
-			long currentTime = System.currentTimeMillis();
-			if ((currentTime - lastRefreshTime) > UI_REFRESH_TIME_MS) {
-				lastRefreshTime = currentTime;
-				publishProgress();
-			}
-		}
 	}
 
 	public long getTotalUsedBytes() {

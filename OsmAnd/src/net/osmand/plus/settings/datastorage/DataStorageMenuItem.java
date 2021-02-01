@@ -1,4 +1,4 @@
-package net.osmand.plus.settings.fragments;
+package net.osmand.plus.settings.datastorage;
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -15,8 +15,12 @@ public class DataStorageMenuItem implements Parcelable, Cloneable {
 	@IdRes
 	private int iconResId;
 
-	private DataStorageMenuItem(String key, int type, String title, String description,
-	                            String directory, int iconResId) {
+	private DataStorageMenuItem(String key,
+	                            int type,
+	                            String title,
+	                            String description,
+	                            String directory,
+	                            int iconResId) {
 		this.key = key;
 		this.type = type;
 		this.title = title;
